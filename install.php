@@ -4,6 +4,9 @@
  * Bu dosyayı kurulum tamamlandıktan sonra silin veya install.lock dosyası oluşturulur.
  */
 
+// Session başlat (en başta)
+session_start();
+
 // Kurulum zaten yapılmış mı kontrol et
 if (file_exists(__DIR__ . '/install.lock')) {
     header('Location: index.php');
@@ -20,37 +23,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'test_db') {
         // Veritabanı bağlantısını test et
-        $host = $_POST['db_host'] ?? 'localhost';
-        $user = $_POST['db_user'] ?? '';
+        $host = trim($_POST['db_host'] ?? 'localhost');
+        $user = trim($_POST['db_user'] ?? '');
         $pass = $_POST['db_pass'] ?? '';
-        $name = $_POST['db_name'] ?? '';
+        $name = trim($_POST['db_name'] ?? '');
 
-        try {
-            $pdo = new PDO("mysql:host=$host", $user, $pass, [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
-            ]);
+        if (empty($user) || empty($name)) {
+            $error = 'Veritabanı kullanıcı adı ve veritabanı adı gereklidir';
+        } else {
+            try {
+                $pdo = new PDO("mysql:host=$host", $user, $pass, [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_TIMEOUT => 5
+                ]);
 
-            // Veritabanı var mı kontrol et, yoksa oluştur
-            $pdo->exec("CREATE DATABASE IF NOT EXISTS `$name` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-            $pdo->exec("USE `$name`");
+                // Veritabanı var mı kontrol et, yoksa oluştur
+                $pdo->exec("CREATE DATABASE IF NOT EXISTS `$name` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                $pdo->exec("USE `$name`");
 
-            $_SESSION['db_config'] = [
-                'host' => $host,
-                'user' => $user,
-                'pass' => $pass,
-                'name' => $name
-            ];
+                $_SESSION['db_config'] = [
+                    'host' => $host,
+                    'user' => $user,
+                    'pass' => $pass,
+                    'name' => $name
+                ];
 
-            header('Location: install.php?step=2');
-            exit;
+                header('Location: install.php?step=2');
+                exit;
 
-        } catch (PDOException $e) {
-            $error = 'Veritabanı bağlantısı başarısız: ' . $e->getMessage();
+            } catch (PDOException $e) {
+                $errorMsg = $e->getMessage();
+                if (strpos($errorMsg, 'Access denied') !== false) {
+                    $error = 'Veritabanı erişimi reddedildi. Kullanıcı adı veya şifreyi kontrol edin.';
+                } elseif (strpos($errorMsg, 'Unknown MySQL server host') !== false || strpos($errorMsg, 'Connection refused') !== false) {
+                    $error = 'Veritabanı sunucusuna bağlanılamadı. Host adresini kontrol edin.';
+                } else {
+                    $error = 'Veritabanı bağlantısı başarısız: ' . $errorMsg;
+                }
+            }
         }
     }
 
     if ($action === 'create_tables') {
-        session_start();
         $dbConfig = $_SESSION['db_config'] ?? null;
 
         if (!$dbConfig) {
@@ -183,7 +197,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'create_admin') {
-        session_start();
         $dbConfig = $_SESSION['db_config'] ?? null;
 
         if (!$dbConfig) {
@@ -347,8 +360,6 @@ function formatMoney($amount, $currency = \'TRY\') {
         }
     }
 }
-
-session_start();
 ?>
 <!DOCTYPE html>
 <html lang="tr">

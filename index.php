@@ -3,6 +3,12 @@
  * Kişisel Dashboard - Giriş Sayfası
  */
 
+// Kurulum kontrolü - install.lock yoksa kuruluma yönlendir
+if (!file_exists(__DIR__ . '/install.lock')) {
+    header('Location: install.php');
+    exit;
+}
+
 require_once 'includes/auth.php';
 
 startSecureSession();

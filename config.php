@@ -3,6 +3,20 @@
  * Kişisel Dashboard - Yapılandırma Dosyası
  */
 
+// Kurulum kontrolü - install.lock yoksa kuruluma yönlendir
+if (!file_exists(__DIR__ . '/install.lock')) {
+    // API isteği ise JSON döndür
+    if (strpos($_SERVER['REQUEST_URI'] ?? '', '/api/') !== false) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(503);
+        echo json_encode(['error' => 'Kurulum gerekli', 'redirect' => 'install.php']);
+        exit;
+    }
+    // Normal sayfa ise yönlendir
+    header('Location: install.php');
+    exit;
+}
+
 // Hata raporlama (geliştirme için)
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
