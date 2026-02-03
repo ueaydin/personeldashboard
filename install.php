@@ -1,11 +1,8 @@
 <?php
 /**
  * Kişisel Dashboard - Kurulum Sihirbazı
- * Bu dosyayı kurulum tamamlandıktan sonra silin veya install.lock dosyası oluşturulur.
+ * Session kullanmadan çalışır - Hostinger uyumlu
  */
-
-// Session başlat (en başta)
-session_start();
 
 // Kurulum zaten yapılmış mı kontrol et
 if (file_exists(__DIR__ . '/install.lock')) {
@@ -17,12 +14,25 @@ $step = $_GET['step'] ?? 1;
 $error = '';
 $success = '';
 
+// Veritabanı bilgilerini şifrele/çöz (basit base64)
+function encodeDbConfig($config) {
+    return base64_encode(json_encode($config));
+}
+
+function decodeDbConfig($encoded) {
+    $decoded = base64_decode($encoded);
+    return $decoded ? json_decode($decoded, true) : null;
+}
+
+// POST'tan veya GET'ten db_config al
+$dbConfigEncoded = $_POST['db_config'] ?? $_GET['db_config'] ?? '';
+$dbConfig = $dbConfigEncoded ? decodeDbConfig($dbConfigEncoded) : null;
+
 // Form işleme
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'test_db') {
-        // Veritabanı bağlantısını test et
         $host = trim($_POST['db_host'] ?? 'localhost');
         $user = trim($_POST['db_user'] ?? '');
         $pass = $_POST['db_pass'] ?? '';
@@ -41,14 +51,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->exec("CREATE DATABASE IF NOT EXISTS `$name` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
                 $pdo->exec("USE `$name`");
 
-                $_SESSION['db_config'] = [
+                $dbConfig = [
                     'host' => $host,
                     'user' => $user,
                     'pass' => $pass,
                     'name' => $name
                 ];
+                $dbConfigEncoded = encodeDbConfig($dbConfig);
 
-                header('Location: install.php?step=2');
+                header('Location: install.php?step=2&db_config=' . urlencode($dbConfigEncoded));
                 exit;
 
             } catch (PDOException $e) {
@@ -65,8 +76,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'create_tables') {
-        $dbConfig = $_SESSION['db_config'] ?? null;
-
         if (!$dbConfig) {
             header('Location: install.php?step=1');
             exit;
@@ -80,115 +89,93 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
             );
 
-            // Tabloları oluştur
-            $sql = "
-                -- Kullanıcılar tablosu
-                CREATE TABLE IF NOT EXISTS users (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    username VARCHAR(50) NOT NULL UNIQUE,
-                    email VARCHAR(100) NOT NULL UNIQUE,
-                    password VARCHAR(255) NOT NULL,
-                    full_name VARCHAR(100),
-                    avatar VARCHAR(255) DEFAULT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            // Tabloları tek tek oluştur
+            $pdo->exec("CREATE TABLE IF NOT EXISTS users (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                username VARCHAR(50) NOT NULL UNIQUE,
+                email VARCHAR(100) NOT NULL UNIQUE,
+                password VARCHAR(255) NOT NULL,
+                full_name VARCHAR(100),
+                avatar VARCHAR(255) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-                -- Kullanıcı ayarları tablosu
-                CREATE TABLE IF NOT EXISTS user_settings (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    user_id INT NOT NULL,
-                    setting_key VARCHAR(50) NOT NULL,
-                    setting_value TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    UNIQUE KEY unique_user_setting (user_id, setting_key)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            $pdo->exec("CREATE TABLE IF NOT EXISTS user_settings (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                user_id INT NOT NULL,
+                setting_key VARCHAR(50) NOT NULL,
+                setting_value TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE KEY unique_user_setting (user_id, setting_key)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-                -- Ödemeler tablosu
-                CREATE TABLE IF NOT EXISTS payments (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    user_id INT NOT NULL,
-                    title VARCHAR(100) NOT NULL,
-                    amount DECIMAL(10,2) NOT NULL,
-                    currency VARCHAR(3) DEFAULT 'TRY',
-                    due_date DATE NOT NULL,
-                    category VARCHAR(50),
-                    status ENUM('pending', 'paid', 'overdue') DEFAULT 'pending',
-                    is_recurring BOOLEAN DEFAULT FALSE,
-                    recurring_period ENUM('weekly', 'monthly', 'yearly') DEFAULT NULL,
-                    notes TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            $pdo->exec("CREATE TABLE IF NOT EXISTS payments (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                user_id INT NOT NULL,
+                title VARCHAR(100) NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
+                currency VARCHAR(3) DEFAULT 'TRY',
+                due_date DATE NOT NULL,
+                category VARCHAR(50),
+                status ENUM('pending', 'paid', 'overdue') DEFAULT 'pending',
+                is_recurring BOOLEAN DEFAULT FALSE,
+                recurring_period ENUM('weekly', 'monthly', 'yearly') DEFAULT NULL,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-                -- Takvim olayları tablosu
-                CREATE TABLE IF NOT EXISTS calendar_events (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    user_id INT NOT NULL,
-                    title VARCHAR(150) NOT NULL,
-                    description TEXT,
-                    event_date DATE NOT NULL,
-                    event_time TIME DEFAULT NULL,
-                    end_date DATE DEFAULT NULL,
-                    end_time TIME DEFAULT NULL,
-                    event_type ENUM('birthday', 'anniversary', 'meeting', 'reminder', 'holiday', 'other') DEFAULT 'other',
-                    color VARCHAR(7) DEFAULT '#6366f1',
-                    is_recurring BOOLEAN DEFAULT FALSE,
-                    recurring_period ENUM('weekly', 'monthly', 'yearly') DEFAULT NULL,
-                    reminder_before INT DEFAULT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            $pdo->exec("CREATE TABLE IF NOT EXISTS calendar_events (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                user_id INT NOT NULL,
+                title VARCHAR(150) NOT NULL,
+                description TEXT,
+                event_date DATE NOT NULL,
+                event_time TIME DEFAULT NULL,
+                end_date DATE DEFAULT NULL,
+                end_time TIME DEFAULT NULL,
+                event_type ENUM('birthday', 'anniversary', 'meeting', 'reminder', 'holiday', 'other') DEFAULT 'other',
+                color VARCHAR(7) DEFAULT '#6366f1',
+                is_recurring BOOLEAN DEFAULT FALSE,
+                recurring_period ENUM('weekly', 'monthly', 'yearly') DEFAULT NULL,
+                reminder_before INT DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-                -- Notlar tablosu
-                CREATE TABLE IF NOT EXISTS notes (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    user_id INT NOT NULL,
-                    title VARCHAR(150) NOT NULL,
-                    content TEXT,
-                    color VARCHAR(7) DEFAULT '#fbbf24',
-                    is_pinned BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            $pdo->exec("CREATE TABLE IF NOT EXISTS notes (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                user_id INT NOT NULL,
+                title VARCHAR(150) NOT NULL,
+                content TEXT,
+                color VARCHAR(7) DEFAULT '#fbbf24',
+                is_pinned BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-                -- Yapılacaklar listesi tablosu
-                CREATE TABLE IF NOT EXISTS todos (
-                    id INT PRIMARY KEY AUTO_INCREMENT,
-                    user_id INT NOT NULL,
-                    title VARCHAR(200) NOT NULL,
-                    description TEXT,
-                    priority ENUM('low', 'medium', 'high') DEFAULT 'medium',
-                    status ENUM('pending', 'in_progress', 'completed') DEFAULT 'pending',
-                    due_date DATE DEFAULT NULL,
-                    category VARCHAR(50),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    completed_at TIMESTAMP DEFAULT NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            $pdo->exec("CREATE TABLE IF NOT EXISTS todos (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                user_id INT NOT NULL,
+                title VARCHAR(200) NOT NULL,
+                description TEXT,
+                priority ENUM('low', 'medium', 'high') DEFAULT 'medium',
+                status ENUM('pending', 'in_progress', 'completed') DEFAULT 'pending',
+                due_date DATE DEFAULT NULL,
+                category VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP DEFAULT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-                -- İndeksler
-                CREATE INDEX IF NOT EXISTS idx_payments_user_date ON payments(user_id, due_date);
-                CREATE INDEX IF NOT EXISTS idx_calendar_user_date ON calendar_events(user_id, event_date);
-                CREATE INDEX IF NOT EXISTS idx_notes_user_pinned ON notes(user_id, is_pinned);
-                CREATE INDEX IF NOT EXISTS idx_todos_user_status ON todos(user_id, status);
-            ";
-
-            // Her SQL ifadesini ayrı çalıştır
-            $statements = array_filter(array_map('trim', explode(';', $sql)));
-            foreach ($statements as $statement) {
-                if (!empty($statement) && !str_starts_with($statement, '--')) {
-                    $pdo->exec($statement);
-                }
-            }
-
-            header('Location: install.php?step=3');
+            header('Location: install.php?step=3&db_config=' . urlencode($dbConfigEncoded));
             exit;
 
         } catch (PDOException $e) {
@@ -197,8 +184,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'create_admin') {
-        $dbConfig = $_SESSION['db_config'] ?? null;
-
         if (!$dbConfig) {
             header('Location: install.php?step=1');
             exit;
@@ -304,6 +289,9 @@ function getDBConnection() {
 
 // CSRF token oluştur
 function generateCSRFToken() {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
     if (empty($_SESSION[CSRF_TOKEN_NAME])) {
         $_SESSION[CSRF_TOKEN_NAME] = bin2hex(random_bytes(32));
     }
@@ -347,9 +335,7 @@ function formatMoney($amount, $currency = \'TRY\') {
                 file_put_contents(__DIR__ . '/config.php', $configContent);
 
                 // Kurulum kilit dosyası oluştur
-                file_put_contents(__DIR__ . '/install.lock', date('Y-m-d H:i:s') . "\nKurulum tamamlandı.");
-
-                $_SESSION['install_complete'] = true;
+                file_put_contents(__DIR__ . '/install.lock', date('Y-m-d H:i:s') . "\nKurulum tamamlandı.\nAdmin: " . $adminUser);
 
                 header('Location: install.php?step=4');
                 exit;
@@ -359,6 +345,12 @@ function formatMoney($amount, $currency = \'TRY\') {
             }
         }
     }
+}
+
+// step=2 veya step=3'te db_config yoksa step=1'e dön
+if (($step == 2 || $step == 3) && !$dbConfig) {
+    header('Location: install.php?step=1');
+    exit;
 }
 ?>
 <!DOCTYPE html>
@@ -456,7 +448,6 @@ function formatMoney($amount, $currency = \'TRY\') {
             font-size: 0.95rem;
         }
 
-        /* Steps */
         .steps {
             display: flex;
             justify-content: center;
@@ -505,10 +496,7 @@ function formatMoney($amount, $currency = \'TRY\') {
             background: var(--success);
         }
 
-        /* Form */
-        .form-group {
-            margin-bottom: 20px;
-        }
+        .form-group { margin-bottom: 20px; }
 
         .form-label {
             display: block;
@@ -536,9 +524,7 @@ function formatMoney($amount, $currency = \'TRY\') {
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
         }
 
-        .form-input::placeholder {
-            color: var(--text-muted);
-        }
+        .form-input::placeholder { color: var(--text-muted); }
 
         .form-row {
             display: grid;
@@ -580,7 +566,6 @@ function formatMoney($amount, $currency = \'TRY\') {
             background: linear-gradient(135deg, var(--success), #059669);
         }
 
-        /* Messages */
         .message {
             padding: 14px 18px;
             border-radius: 12px;
@@ -600,7 +585,6 @@ function formatMoney($amount, $currency = \'TRY\') {
             color: #6ee7b7;
         }
 
-        /* Complete */
         .complete-icon {
             width: 80px;
             height: 80px;
@@ -680,7 +664,6 @@ function formatMoney($amount, $currency = \'TRY\') {
             <?php endif; ?>
 
             <?php if ($step == 1): ?>
-            <!-- Adım 1: Veritabanı Ayarları -->
             <h2 style="font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; margin-bottom: 24px; text-align: center;">Veritabanı Ayarları</h2>
 
             <form method="POST">
@@ -713,7 +696,6 @@ function formatMoney($amount, $currency = \'TRY\') {
             </form>
 
             <?php elseif ($step == 2): ?>
-            <!-- Adım 2: Tablo Oluşturma -->
             <h2 style="font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; margin-bottom: 24px; text-align: center;">Veritabanı Tabloları</h2>
 
             <div class="message message-success">Veritabanı bağlantısı başarılı!</div>
@@ -724,17 +706,18 @@ function formatMoney($amount, $currency = \'TRY\') {
 
             <form method="POST">
                 <input type="hidden" name="action" value="create_tables">
+                <input type="hidden" name="db_config" value="<?php echo htmlspecialchars($dbConfigEncoded); ?>">
                 <button type="submit" class="btn">Tabloları Oluştur</button>
             </form>
 
             <?php elseif ($step == 3): ?>
-            <!-- Adım 3: Admin Hesabı -->
             <h2 style="font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; margin-bottom: 24px; text-align: center;">Admin Hesabı Oluştur</h2>
 
             <div class="message message-success">Tablolar başarıyla oluşturuldu!</div>
 
             <form method="POST">
                 <input type="hidden" name="action" value="create_admin">
+                <input type="hidden" name="db_config" value="<?php echo htmlspecialchars($dbConfigEncoded); ?>">
 
                 <div class="form-row">
                     <div class="form-group">
@@ -780,7 +763,6 @@ function formatMoney($amount, $currency = \'TRY\') {
             </form>
 
             <?php elseif ($step == 4): ?>
-            <!-- Adım 4: Tamamlandı -->
             <div style="text-align: center;">
                 <div class="complete-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
