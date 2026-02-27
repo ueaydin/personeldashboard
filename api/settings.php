@@ -25,7 +25,7 @@ try {
 
         case 'POST':
         case 'PUT':
-            $data = json_decode(file_get_contents('php://input'), true);
+            $data = json_decode(getRawInput(), true);
 
             if (empty($data)) {
                 jsonResponse(['error' => 'Veri bulunamadı'], 400);

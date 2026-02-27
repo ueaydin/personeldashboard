@@ -90,6 +90,15 @@ function requireApiLogin() {
     if (!isLoggedIn() || !checkSessionTimeout()) {
         jsonResponse(['error' => 'Oturum açmanız gerekiyor'], 401);
     }
+
+    // State-changing requests için CSRF kontrolü
+    $method = $_SERVER['REQUEST_METHOD'];
+    if (in_array($method, ['POST', 'PUT', 'DELETE'])) {
+        $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? $_SERVER['X-CSRF-TOKEN'] ?? '';
+        if (!validateCSRFToken($token)) {
+            jsonResponse(['error' => 'Geçersiz veya eksik CSRF token (' . $token . ')'], 403);
+        }
+    }
 }
 
 // Mevcut kullanıcı ID'sini al

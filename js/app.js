@@ -242,7 +242,10 @@ async function markPaymentPaid(id) {
     try {
         const response = await fetch('api/payments.php', {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': CSRF_TOKEN
+            },
             body: JSON.stringify({ id, status: 'paid' })
         });
 
@@ -282,7 +285,10 @@ async function deletePayment(id) {
     if (!confirm('Bu ödemeyi silmek istediğinizden emin misiniz?')) return;
 
     try {
-        const response = await fetch(`api/payments.php?id=${id}`, { method: 'DELETE' });
+        const response = await fetch(`api/payments.php?id=${id}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': CSRF_TOKEN }
+        });
 
         if (response.ok) {
             showToast('Ödeme silindi', 'success');
@@ -306,7 +312,10 @@ async function savePayment(e) {
         const isEdit = data.id && data.id !== '';
         const response = await fetch('api/payments.php', {
             method: isEdit ? 'PUT' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': CSRF_TOKEN
+            },
             body: JSON.stringify(data)
         });
 
@@ -427,7 +436,10 @@ async function deleteEvent(id) {
     if (!confirm('Bu etkinliği silmek istediğinizden emin misiniz?')) return;
 
     try {
-        const response = await fetch(`api/calendar.php?id=${id}`, { method: 'DELETE' });
+        const response = await fetch(`api/calendar.php?id=${id}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': CSRF_TOKEN }
+        });
 
         if (response.ok) {
             showToast('Etkinlik silindi', 'success');
@@ -451,7 +463,10 @@ async function saveEvent(e) {
         const isEdit = data.id && data.id !== '';
         const response = await fetch('api/calendar.php', {
             method: isEdit ? 'PUT' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': CSRF_TOKEN
+            },
             body: JSON.stringify(data)
         });
 
@@ -538,7 +553,10 @@ async function toggleTodo(id, currentStatus) {
     try {
         const response = await fetch('api/todos.php', {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': CSRF_TOKEN
+            },
             body: JSON.stringify({ id, status: newStatus })
         });
 
@@ -573,7 +591,10 @@ async function deleteTodo(id) {
     if (!confirm('Bu görevi silmek istediğinizden emin misiniz?')) return;
 
     try {
-        const response = await fetch(`api/todos.php?id=${id}`, { method: 'DELETE' });
+        const response = await fetch(`api/todos.php?id=${id}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': CSRF_TOKEN }
+        });
 
         if (response.ok) {
             showToast('Görev silindi', 'success');
@@ -596,7 +617,10 @@ async function saveTodo(e) {
         const isEdit = data.id && data.id !== '';
         const response = await fetch('api/todos.php', {
             method: isEdit ? 'PUT' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': CSRF_TOKEN
+            },
             body: JSON.stringify(data)
         });
 
@@ -681,7 +705,10 @@ async function deleteNote(id) {
     if (!confirm('Bu notu silmek istediğinizden emin misiniz?')) return;
 
     try {
-        const response = await fetch(`api/notes.php?id=${id}`, { method: 'DELETE' });
+        const response = await fetch(`api/notes.php?id=${id}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': CSRF_TOKEN }
+        });
 
         if (response.ok) {
             showToast('Not silindi', 'success');
@@ -705,7 +732,10 @@ async function saveNote(e) {
         const isEdit = data.id && data.id !== '';
         const response = await fetch('api/notes.php', {
             method: isEdit ? 'PUT' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': CSRF_TOKEN
+            },
             body: JSON.stringify(data)
         });
 
@@ -771,7 +801,10 @@ async function saveSettings(e) {
     try {
         const response = await fetch('api/settings.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': CSRF_TOKEN
+            },
             body: JSON.stringify(data)
         });
 

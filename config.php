@@ -55,6 +55,15 @@ define('SESSION_LIFETIME', 86400); // 24 saat
 function getDBConnection() {
     static $pdo = null;
 
+    if (defined('TEST_MODE')) {
+        if ($pdo === null) {
+            $pdo = new PDO("sqlite:" . __DIR__ . "/tests/test_db.sqlite");
+            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+        }
+        return $pdo;
+    }
+
     if ($pdo === null) {
         $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
         $options = [
@@ -67,7 +76,13 @@ function getDBConnection() {
             $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
         } catch (PDOException $e) {
             error_log("Veritabanı bağlantı hatası: " . $e->getMessage());
-            die(json_encode(['error' => 'Veritabanı bağlantısı kurulamadı']));
+
+            // API isteği ise JSON döndür
+            if (strpos($_SERVER['REQUEST_URI'] ?? '', '/api/') !== false) {
+                jsonResponse(['error' => 'Veritabanı bağlantısı kurulamadı'], 503);
+            }
+
+            die("Veritabanı bağlantısı kurulamadı. Lütfen sistem yöneticisine danışın.");
         }
     }
 
@@ -84,15 +99,29 @@ function generateCSRFToken() {
 
 // CSRF token doğrula
 function validateCSRFToken($token) {
+    if (empty($token)) return false;
+    if (defined('TEST_MODE') && $token === 'test_csrf_token') return true;
     return isset($_SESSION[CSRF_TOKEN_NAME]) && hash_equals($_SESSION[CSRF_TOKEN_NAME], $token);
 }
 
 // JSON yanıt gönder
 function jsonResponse($data, $statusCode = 200) {
+    if (defined('TEST_MODE')) {
+        $GLOBALS['API_RESPONSE'] = ['data' => $data, 'status' => $statusCode];
+        throw new Exception("API_RESPONSE_SENT");
+    }
     http_response_code($statusCode);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($data, JSON_UNESCAPED_UNICODE);
     exit;
+}
+
+// Get raw input data (for testing)
+function getRawInput() {
+    if (defined('TEST_MODE') && isset($GLOBALS['TEST_INPUT'])) {
+        return $GLOBALS['TEST_INPUT'];
+    }
+    return file_get_contents('php://input');
 }
 
 // Güvenli input temizleme
