@@ -78,7 +78,7 @@ try {
 
         case 'POST':
             // Yeni ödeme ekle
-            $data = json_decode(file_get_contents('php://input'), true);
+            $data = json_decode(getRawInput(), true);
 
             if (empty($data['title']) || empty($data['amount']) || empty($data['due_date'])) {
                 jsonResponse(['error' => 'Başlık, tutar ve vade tarihi gereklidir'], 400);
@@ -111,7 +111,7 @@ try {
 
         case 'PUT':
             // Ödeme güncelle
-            $data = json_decode(file_get_contents('php://input'), true);
+            $data = json_decode(getRawInput(), true);
 
             if (empty($data['id'])) {
                 jsonResponse(['error' => 'Ödeme ID gereklidir'], 400);
